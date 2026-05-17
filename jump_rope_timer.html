@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>줄넘기 타이머</title>
+<style>
+  :root {
+    --blue: #4A6FE3;
+    --green: #2E9E5B;
+    --red: #D32F2F;
+    --orange: #F4A020;
+    --bg: #0f0f1a;
+    --bg2: #1a1a2e;
+    --bg3: #242440;
+    --text: #f0f0ff;
+    --text2: #a0a0c0;
+    --text3: #606080;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, 'Helvetica Neue', sans-serif; overflow: hidden; }
+
+  .screen { display: none; flex-direction: column; align-items: center; height: 100vh; padding: 20px 16px; overflow-y: auto; }
+  .screen.active { display: flex; }
+
+  /* ── SETTINGS ── */
+  .logo { font-size: 36px; margin: 12px 0 4px; }
+  .app-name { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .app-sub { font-size: 13px; color: var(--text2); margin-bottom: 28px; }
+
+  .set-card { width: 100%; background: var(--bg2); border-radius: var(--radius); padding: 18px 20px; margin-bottom: 12px; border: 1px solid #2a2a4a; }
+  .set-card-title { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 14px; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .set-row:last-child { margin-bottom: 0; }
+  .set-label { font-size: 15px; color: var(--text); }
+  .num-ctrl { display: flex; align-items: center; gap: 12px; }
+  .nbtn { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #3a3a5a; background: var(--bg3); color: var(--text); font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .15s; user-select: none; }
+  .nbtn:active { background: #3a3a6a; }
+  .nval { font-size: 16px; font-weight: 600; min-width: 52px; text-align: center; color: #a0b4ff; }
+
+  .start-btn { width: 100%; padding: 17px; border-radius: var(--radius); border: none; background: var(--blue); color: #fff; font-size: 17px; font-weight: 700; cursor: pointer; margin-top: 8px; letter-spacing: 0.02em; transition: opacity .15s; }
+  .start-btn:active { opacity: 0.82; }
+
+  /* ── TIMER ── */
+  #screen-timer { justify-content: space-between; padding-bottom: 28px; }
+  .timer-top { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 4px 0 16px; }
+  .round-pill { background: var(--bg2); border: 1px solid #2a2a4a; border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--text2); }
+  .pause-icon-btn { background: none; border: none; color: var(--text2); font-size: 22px; cursor: pointer; padding: 4px 8px; }
+
+  .phase-label { font-size: 13px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 14px; }
+  .phase-label.exercise { color: #7090ff; }
+  .phase-label.rest { color: #50c878; }
+  .phase-label.ready { color: var(--orange); }
+  .phase-label.done { color: #c080ff; }
+
+  .ring-wrap { position: relative; width: 220px; height: 220px; }
+  .ring-wrap svg { position: absolute; top: 0; left: 0; transform: rotate(-90deg); }
+  .ring-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; pointer-events: none; }
+  .ring-time { font-size: 52px; font-weight: 700; letter-spacing: -2px; line-height: 1; }
+  .ring-sub { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+  /* fail overlay inside ring */
+  .fail-ring-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border-radius: 50%; background: rgba(200,30,30,0.93); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+  .fail-ring-overlay.show { display: flex; animation: popIn .25s cubic-bezier(.2,1.4,.5,1); }
+  @keyframes popIn { from{transform:scale(0.7);opacity:0} to{transform:scale(1);opacity:1} }
+  .fail-num { font-size: 80px; font-weight: 900; color: #fff; line-height: 1; animation: numPop .3s cubic-bezier(.2,1.4,.5,1); }
+  @keyframes numPop { from{transform:scale(1.6)} to{transform:scale(1)} }
+  .fail-txt { font-size: 14px; color: rgba(255,255,255,0.85); margin-top: 2px; font-weight: 600; letter-spacing: 0.05em; }
+
+  /* fighting message */
+  .fighting-msg { opacity: 0; font-size: 26px; font-weight: 900; color: #FFD700; text-align: center; margin: 10px 0; letter-spacing: 0.02em; text-shadow: 0 0 20px rgba(255,215,0,0.4); transition: opacity .3s; height: 36px; display: flex; align-items: center; justify-content: center; }
+  .fighting-msg.show { opacity: 1; animation: fightPop .4s cubic-bezier(.2,1.4,.5,1); }
+  @keyframes fightPop { from{transform:scale(0.6) translateY(10px)} to{transform:scale(1) translateY(0)} }
+
+  .progress-bar-wrap { width: 100%; background: var(--bg2); border-radius: 6px; height: 6px; overflow: hidden; margin: 4px 0 8px; }
+  .progress-bar { height: 100%; border-radius: 6px; transition: width .95s linear, background .4s; }
+
+  .fail-trigger-btn { width: 100%; padding: 15px; border-radius: var(--radius); border: 2px solid #D32F2F; background: rgba(211,47,47,0.12); color: #ff6060; font-size: 16px; font-weight: 700; cursor: pointer; transition: background .15s; letter-spacing: 0.02em; }
+  .fail-trigger-btn:active { background: rgba(211,47,47,0.28); }
+
+  .bottom-btns { display: flex; gap: 10px; width: 100%; }
+  .stop-btn { flex: 1; padding: 13px; border-radius: var(--radius-sm); border: 1px solid #3a3a5a; background: transparent; color: var(--text2); font-size: 14px; cursor: pointer; }
+
+  /* ── DONE ── */
+  #screen-done { justify-content: center; gap: 0; }
+  .done-icon { font-size: 56px; margin-bottom: 12px; }
+  .done-title { font-size: 26px; font-weight: 800; margin-bottom: 6px; }
+  .done-sub { font-size: 14px; color: var(--text2); margin-bottom: 28px; text-align: center; line-height: 1.6; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-bottom: 24px; }
+  .stat-card { background: var(--bg2); border-radius: var(--radius-sm); padding: 14px 16px; text-align: center; border: 1px solid #2a2a4a; }
+  .stat-val { font-size: 28px; font-weight: 700; color: #a0b4ff; }
+  .stat-lbl { font-size: 12px; color: var(--text2); margin-top: 3px; }
+  .again-btn { width: 100%; padding: 16px; border-radius: var(--radius); border: none; background: var(--blue); color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; }
+
+  /* shake */
+  @keyframes shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)} 60%{transform:translateX(8px)} 80%{transform:translateX(-4px)} }
+  .shake { animation: shake .35s ease; }
+</style>
+</head>
+<body>
+
+<!-- SETTINGS -->
+<div class="screen active" id="screen-settings">
+  <div class="logo">🪢</div>
+  <p class="app-name">줄넘기 타이머</p>
+  <p class="app-sub">체육 선생님을 위한 인터벌 트레이너</p>
+
+  <div class="set-card">
+    <p class="set-card-title">⏱ 시간 설정</p>
+    <div class="set-row">
+      <span class="set-label">운동 시간</span>
+      <div class="num-ctrl">
+        <div class="nbtn" onclick="adj('ex',-5)">−</div>
+        <span class="nval" id="v-ex">1:30</span>
+        <div class="nbtn" onclick="adj('ex',5)">+</div>
+      </div>
+    </div>
+    <div class="set-row">
+      <span class="set-label">휴식 시간</span>
+      <div class="num-ctrl">
+        <div class="nbtn" onclick="adj('rest',-5)">−</div>
+        <span class="nval" id="v-rest">0:40</span>
+        <div class="nbtn" onclick="adj('rest',5)">+</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="set-card">
+    <p class="set-card-title">🔁 라운드</p>
+    <div class="set-row">
+      <span class="set-label">총 라운드</span>
+      <div class="num-ctrl">
+        <div class="nbtn" onclick="adj('rounds',-1)">−</div>
+        <span class="nval" id="v-rounds">5</span>
+        <div class="nbtn" onclick="adj('rounds',1)">+</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="set-card" style="background:rgba(74,111,227,0.08);border-color:#3a4a8a;">
+    <p class="set-card-title" style="color:#7090ff;">🔊 음성 & 소리 안내</p>
+    <p style="font-size:13px;color:var(--text2);line-height:1.7;">
+      • 라운드 시작/종료 — 효과음<br>
+      • 줄에 걸리면 — "삼! 이! 일!" 음성 카운트<br>
+      • 3초 안에 복귀 — "파이팅!" 음성 응원
+    </p>
+  </div>
+
+  <button class="start-btn" onclick="startWorkout()">▶ 운동 시작</button>
+</div>
+
+<!-- TIMER -->
+<div class="screen" id="screen-timer">
+  <div class="timer-top">
+    <span class="round-pill" id="round-pill">라운드 1 / 5</span>
+    <button class="pause-icon-btn" id="pause-btn" onclick="togglePause()">⏸</button>
+  </div>
+
+  <p class="phase-label exercise" id="phase-lbl">운동 중</p>
+
+  <div class="ring-wrap" id="ring-wrap">
+    <svg width="220" height="220" viewBox="0 0 220 220">
+      <circle cx="110" cy="110" r="96" fill="none" stroke="#1a1a3a" stroke-width="12"/>
+      <circle id="ring-fg" cx="110" cy="110" r="96" fill="none" stroke="#4A6FE3"
+        stroke-width="12" stroke-linecap="round"
+        stroke-dasharray="603" stroke-dashoffset="603"/>
+    </svg>
+    <div class="ring-center">
+      <div class="ring-time" id="ring-time">1:30</div>
+      <div class="ring-sub" id="ring-sub">남은 시간</div>
+    </div>
+    <div class="fail-ring-overlay" id="fail-overlay">
+      <div class="fail-num" id="fail-num">3</div>
+      <div class="fail-txt">초 안에 점프!</div>
+    </div>
+  </div>
+
+  <div class="fighting-msg" id="fighting-msg">💪 파이팅!</div>
+
+  <div class="progress-bar-wrap">
+    <div class="progress-bar" id="prog-bar" style="width:0%;background:var(--blue)"></div>
+  </div>
+
+  <div style="width:100%;margin-bottom:12px;">
+    <button class="fail-trigger-btn" id="fail-btn" onclick="triggerFail()">
+      ⚠️ 줄에 걸렸어요!
+    </button>
+  </div>
+
+  <div class="bottom-btns">
+    <button class="stop-btn" onclick="stopWorkout()">■ 종료</button>
+  </div>
+</div>
+
+<!-- DONE -->
+<div class="screen" id="screen-done">
+  <div class="done-icon">🏆</div>
+  <p class="done-title">운동 완료!</p>
+  <p class="done-sub" id="done-sub">수고했습니다!</p>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-val" id="s-rounds">5</div><div class="stat-lbl">완료 라운드</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-fails">0</div><div class="stat-lbl">걸린 횟수</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-recovered">0</div><div class="stat-lbl">3초 복귀 성공</div></div>
+    <div class="stat-card"><div class="stat-val" id="s-time">0분</div><div class="stat-lbl">총 운동 시간</div></div>
+  </div>
+  <button class="again-btn" onclick="goSettings()">↩ 다시 설정</button>
+</div>
+
+<script>
+const CIRC = 2 * Math.PI * 96; // ~603
+
+// ── CONFIG ──
+let cfg = { ex: 90, rest: 40, rounds: 5 };
+
+function fmt(s) { return Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60; }
+function adj(k, d) {
+  if (k==='ex')     cfg.ex     = Math.max(10, cfg.ex + d);
+  if (k==='rest')   cfg.rest   = Math.max(5,  cfg.rest + d);
+  if (k==='rounds') cfg.rounds = Math.max(1,  Math.min(20, cfg.rounds + d));
+  document.getElementById('v-ex').textContent     = fmt(cfg.ex);
+  document.getElementById('v-rest').textContent   = fmt(cfg.rest);
+  document.getElementById('v-rounds').textContent = cfg.rounds;
+}
+
+// ── AUDIO ──
+let ctx = null;
+function getCtx() {
+  if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state === 'suspended') ctx.resume();
+  return ctx;
+}
+
+function beep(freq, dur, type='sine', vol=0.5, delay=0) {
+  const c = getCtx();
+  const o = c.createOscillator();
+  const g = c.createGain();
+  o.connect(g); g.connect(c.destination);
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0, c.currentTime + delay);
+  g.gain.linearRampToValueAtTime(vol, c.currentTime + delay + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + delay + dur);
+  o.start(c.currentTime + delay);
+  o.stop(c.currentTime + delay + dur + 0.05);
+}
+
+// Round START — 3 ascending beeps
+function soundRoundStart() {
+  beep(440, 0.12, 'square', 0.4, 0);
+  beep(554, 0.12, 'square', 0.4, 0.15);
+  beep(660, 0.22, 'square', 0.5, 0.30);
+}
+
+// Round END — descending sweep
+function soundRoundEnd() {
+  beep(660, 0.12, 'square', 0.4, 0);
+  beep(554, 0.12, 'square', 0.4, 0.15);
+  beep(440, 0.12, 'square', 0.4, 0.30);
+  beep(330, 0.35, 'square', 0.4, 0.45);
+}
+
+// Fail alert — harsh buzz
+function soundFail() {
+  beep(180, 0.25, 'sawtooth', 0.6, 0);
+  beep(160, 0.25, 'sawtooth', 0.5, 0.28);
+}
+
+// Recovery — bright chime
+function soundRecovery() {
+  beep(523, 0.1,  'sine', 0.45, 0);
+  beep(659, 0.1,  'sine', 0.45, 0.1);
+  beep(784, 0.25, 'sine', 0.5,  0.2);
+}
+
+// Workout complete — fanfare
+function soundComplete() {
+  [523,659,784,1047].forEach((f,i) => beep(f, i===3?0.5:0.15, 'sine', 0.5, i*0.12));
+}
+
+// ── SPEECH ──
+function speak(text, rate=1.1, pitch=1.1) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ko-KR';
+  u.rate = rate;
+  u.pitch = pitch;
+  u.volume = 1;
+  window.speechSynthesis.speak(u);
+}
+
+function speakCountdown(n) {
+  const words = ['', '하나!', '둘!', '셋!'];
+  // Speak bold numbers + Korean, also show big number
+  const texts = { 3: '셋!', 2: '둘!', 1: '하나!' };
+  speak(texts[n] || String(n), 1.0, 1.3);
+}
+
+function speakFighting() {
+  speak('파이팅!', 1.1, 1.4);
+}
+
+// ── STATE ──
+let S = {};
+
+function initState() {
+  S = {
+    round: 1, phase: 'ready', remaining: 3,
+    paused: false, failActive: false,
+    failCount: 0, failTimer: null, mainTimer: null,
+    totalFails: 0, totalRecovered: 0,
+    startTime: null
+  };
+}
+
+// ── SCREENS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── TIMER CORE ──
+function startWorkout() {
+  getCtx(); // unlock audio on user gesture
+  initState();
+  S.startTime = Date.now();
+  showScreen('screen-timer');
+  updateUI();
+  speak('준비!', 1.0, 1.2);
+  runTick();
+}
+
+function runTick() {
+  if (S.mainTimer) clearInterval(S.mainTimer);
+  S.mainTimer = setInterval(() => {
+    if (S.paused || S.failActive) return;
+    S.remaining--;
+    if (S.remaining <= 0) nextPhase();
+    else updateUI();
+  }, 1000);
+}
+
+function nextPhase() {
+  if (S.phase === 'ready') {
+    S.phase = 'exercise'; S.remaining = cfg.ex;
+    soundRoundStart();
+    speak(`${S.round}라운드 시작!`, 1.0, 1.1);
+  } else if (S.phase === 'exercise') {
+    soundRoundEnd();
+    if (S.round >= cfg.rounds) { endWorkout(); return; }
+    S.phase = 'rest'; S.remaining = cfg.rest;
+    speak('휴식!', 1.0, 1.0);
+  } else if (S.phase === 'rest') {
+    S.round++;
+    S.phase = 'exercise'; S.remaining = cfg.ex;
+    soundRoundStart();
+    speak(`${S.round}라운드 시작!`, 1.0, 1.1);
+  }
+  updateUI();
+}
+
+function updateUI() {
+  const total = S.phase==='exercise' ? cfg.ex : S.phase==='rest' ? cfg.rest : 3;
+  const frac = S.remaining / total;
+  const offset = CIRC * (1 - frac);
+
+  const ring = document.getElementById('ring-fg');
+  ring.setAttribute('stroke-dashoffset', offset);
+
+  const colors = { exercise: '#4A6FE3', rest: '#2E9E5B', ready: '#F4A020' };
+  ring.setAttribute('stroke', colors[S.phase] || '#4A6FE3');
+
+  document.getElementById('ring-time').textContent = fmt(S.remaining);
+  document.getElementById('round-pill').textContent = `라운드 ${S.round} / ${cfg.rounds}`;
+
+  const prog = document.getElementById('prog-bar');
+  prog.style.width = ((S.round - 1) / cfg.rounds * 100) + '%';
+  prog.style.background = colors[S.phase] || '#4A6FE3';
+
+  const lbl = document.getElementById('phase-lbl');
+  const phaseMap = { exercise:'운동 중', rest:'휴식', ready:'준비' };
+  lbl.textContent = phaseMap[S.phase] || '';
+  lbl.className = 'phase-label ' + S.phase;
+
+  document.getElementById('ring-sub').textContent = S.phase==='rest' ? '곧 재개' : '남은 시간';
+}
+
+// ── FAIL ──
+function triggerFail() {
+  if (S.failActive || S.phase !== 'exercise') return;
+  S.failActive = true;
+  S.totalFails++;
+
+  soundFail();
+  document.getElementById('ring-wrap').classList.add('shake');
+  setTimeout(() => document.getElementById('ring-wrap').classList.remove('shake'), 400);
+
+  hideFighting();
+  const overlay = document.getElementById('fail-overlay');
+  overlay.classList.add('show');
+
+  let cnt = 3;
+  updateFailDisplay(cnt);
+  speakCountdown(cnt);
+
+  S.failTimer = setInterval(() => {
+    cnt--;
+    if (cnt <= 0) {
+      clearInterval(S.failTimer);
+      overlay.classList.remove('show');
+      S.failActive = false;
+      // timed out — no recovery
+    } else {
+      updateFailDisplay(cnt);
+      speakCountdown(cnt);
+    }
+  }, 1000);
+}
+
+function updateFailDisplay(n) {
+  const el = document.getElementById('fail-num');
+  el.textContent = n;
+  el.style.animation = 'none';
+  void el.offsetWidth;
+  el.style.animation = 'numPop .3s cubic-bezier(.2,1.4,.5,1)';
+}
+
+function recoverFail() {
+  if (!S.failActive) return;
+  clearInterval(S.failTimer);
+  S.failActive = false;
+  S.totalRecovered++;
+  document.getElementById('fail-overlay').classList.remove('show');
+  soundRecovery();
+  speakFighting();
+  showFighting();
+}
+
+function showFighting() {
+  const el = document.getElementById('fighting-msg');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+function hideFighting() {
+  document.getElementById('fighting-msg').classList.remove('show');
+}
+
+// ── MOTION (accelerometer) ──
+let lastMag = null;
+let motionHandler = null;
+
+function startMotion() {
+  motionHandler = function(e) {
+    const a = e.accelerationIncludingGravity;
+    if (!a) return;
+    const mag = Math.sqrt(a.x*a.x + a.y*a.y + a.z*a.z);
+    if (lastMag !== null) {
+      const delta = Math.abs(mag - lastMag);
+      if (delta > 16 && S.failActive) recoverFail();
+    }
+    lastMag = mag;
+  };
+  if (typeof DeviceMotionEvent !== 'undefined' && DeviceMotionEvent.requestPermission) {
+    DeviceMotionEvent.requestPermission().then(r => {
+      if (r === 'granted') window.addEventListener('devicemotion', motionHandler);
+    }).catch(() => {});
+  } else {
+    window.addEventListener('devicemotion', motionHandler);
+  }
+}
+
+function stopMotion() {
+  if (motionHandler) window.removeEventListener('devicemotion', motionHandler);
+  motionHandler = null; lastMag = null;
+}
+
+// ── PAUSE / STOP ──
+function togglePause() {
+  S.paused = !S.paused;
+  document.getElementById('pause-btn').textContent = S.paused ? '▶' : '⏸';
+  if (S.paused) speak('일시정지', 0.9, 1.0);
+}
+
+function stopWorkout() {
+  if (S.mainTimer) clearInterval(S.mainTimer);
+  if (S.failTimer) clearInterval(S.failTimer);
+  stopMotion();
+  endWorkout();
+}
+
+function endWorkout() {
+  if (S.mainTimer) clearInterval(S.mainTimer);
+  stopMotion();
+  soundComplete();
+  speak('운동 완료! 수고했습니다!', 0.9, 1.1);
+
+  const elapsed = Math.round((Date.now() - S.startTime) / 1000 / 60);
+  const rate = S.totalFails > 0 ? Math.round(S.totalRecovered / S.totalFails * 100) : 100;
+
+  document.getElementById('s-rounds').textContent = S.round;
+  document.getElementById('s-fails').textContent = S.totalFails;
+  document.getElementById('s-recovered').textContent = S.totalRecovered;
+  document.getElementById('s-time').textContent = elapsed + '분';
+  document.getElementById('done-sub').textContent =
+    S.totalFails === 0
+      ? '한 번도 안 걸렸어요! 완벽해요! 🎉'
+      : `걸렸어도 ${rate}% 복귀 성공! 포기하지 않았어요 💪`;
+
+  showScreen('screen-done');
+}
+
+function goSettings() { showScreen('screen-settings'); }
+
+// ── INIT: start motion on timer screen ──
+const timerScreen = document.getElementById('screen-timer');
+const observer = new MutationObserver(() => {
+  if (timerScreen.classList.contains('active')) startMotion();
+  else stopMotion();
+});
+observer.observe(timerScreen, { attributes: true, attributeFilter: ['class'] });
+</script>
+</body>
+</html>
